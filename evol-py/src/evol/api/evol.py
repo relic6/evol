@@ -12,6 +12,7 @@ optional attributes of the same facade).
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,6 +53,7 @@ class EvolState:
     memory_version: int
     memory_checksum: str
     experience_count: int
+    reflected_experience_count: int
     paused: bool
     snapshot_versions: list[int]
     last_reflection_id: str | None
@@ -75,7 +77,7 @@ class Evol:
         self.manifest_store = ManifestStore(self.evol_dir)
         self.memory_store = MemoryStore(self.evol_dir / "memory")
         self.snapshot_manager = SnapshotManager(self.evol_dir)
-        self.recorder = Recorder(self.evol_dir)
+        self.recorder = Recorder(self.evol_dir, paused_marker=self.paused_marker)
 
         self._validate_or_initialize()
         self.recorder.ensure_initialized()
@@ -184,13 +186,18 @@ class Evol:
 
     def state(self) -> EvolState:
         manifest = self.manifest_store.read()
+        experience_count = self.recorder.count()
+        reflected_experience_count = int(
+            manifest.experiences.get("reflected_count", manifest.experiences.get("count", 0))
+        ) if manifest.experiences else 0
         return EvolState(
             protocol_version=manifest.protocol_version,
             product_name=str(manifest.product.get("name", "")),
             product_version=str(manifest.product.get("version", "")),
             memory_version=int(manifest.memory.get("current_version", 0)),
             memory_checksum=str(manifest.memory.get("checksum", "")),
-            experience_count=int(manifest.experiences.get("count", 0)) if manifest.experiences else 0,
+            experience_count=experience_count,
+            reflected_experience_count=reflected_experience_count,
             paused=self.is_paused(),
             snapshot_versions=self.snapshot_manager.list_versions(),
             last_reflection_id=(manifest.last_reflection or {}).get("id") if manifest.last_reflection else None,
@@ -240,11 +247,8 @@ class Evol:
         self.manifest_store.write(manifest)
 
         # Step 4: take initial snapshot at v0.
-        try:
+        with suppress(EvolStorageError):
             self.snapshot_manager.create(0)
-        except EvolStorageError:
-            # Already exists from a prior partial init — ignore.
-            pass
         # Mirror config to .evol/config.yaml
         write_runtime_copy(self.config, self.evol_dir)
         _log.info(
@@ -282,10 +286,8 @@ class Evol:
         # Take a snapshot of current memory before the new anchors take effect
         # (CONTRACT §13 A-4).
         latest = self.snapshot_manager.latest_version() or 0
-        try:
+        with suppress(EvolStorageError):
             self.snapshot_manager.create(latest + 1)
-        except EvolStorageError:
-            pass
         # Update manifest's anchor view to current.
         manifest.anchors = current
         self.manifest_store.write(manifest)

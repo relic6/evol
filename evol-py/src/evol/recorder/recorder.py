@@ -60,10 +60,14 @@ class Recorder:
     EXPERIENCES_FILENAME = "experiences.jsonl"
     OVERLAY_FILENAME = "experiences.feedback.jsonl"
 
-    def __init__(self, evol_root: str | Path) -> None:
+    def __init__(self, evol_root: str | Path, *, paused_marker: str | Path | None = None) -> None:
         self.evol_root = Path(evol_root)
+        self.paused_marker = Path(paused_marker) if paused_marker is not None else None
         self.main = JsonlStore(self.evol_root / self.EXPERIENCES_FILENAME)
         self.overlay = JsonlStore(self.evol_root / self.OVERLAY_FILENAME)
+
+    def _is_paused(self) -> bool:
+        return self.paused_marker is not None and self.paused_marker.exists()
 
     # ─── lifecycle ───
 
@@ -129,6 +133,17 @@ class Recorder:
         """Open a new Experience. Synchronous, < 50 ms target."""
         exp_id = gen_experience_id()
         started_at = utc_now_iso()
+        if self._is_paused():
+            _log.info(
+                "start_task ignored while EVOL is paused",
+                extra={"experience_id": exp_id, "task_kind": task_kind},
+            )
+            return TaskHandle(
+                experience_id=exp_id,
+                task_kind=task_kind,
+                started_at=started_at,
+                input=input,
+            )
         metadata: dict[str, Any] = {}
         if ctx:
             metadata.update({k: v for k, v in ctx.items() if k != "task_kind"})
@@ -173,6 +188,12 @@ class Recorder:
         in the main log; the closed line carries the same id and overrides
         the view at read time. This keeps the file strictly append-only.
         """
+        if self._is_paused():
+            _log.info(
+                "end_task ignored while EVOL is paused",
+                extra={"experience_id": handle.experience_id},
+            )
+            return handle.experience_id
         ended_at = utc_now_iso()
         record = {
             "id": handle.experience_id,
@@ -205,6 +226,12 @@ class Recorder:
         Implementation: appends a ``signal`` record to the feedback overlay.
         The main log remains untouched.
         """
+        if self._is_paused():
+            _log.info(
+                "feedback ignored while EVOL is paused",
+                extra={"experience_id": experience_id},
+            )
+            return
         if isinstance(signal, dict):
             signal = Signal.model_validate(signal)
         record = {
@@ -259,7 +286,7 @@ class Recorder:
         for exp_id in order:
             try:
                 yield Experience.model_validate(base[exp_id])
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 _log.warning(
                     "skipping invalid merged experience",
                     extra={"experience_id": exp_id, "err": str(e)},

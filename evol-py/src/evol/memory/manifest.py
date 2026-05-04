@@ -5,7 +5,7 @@ The manifest is the single source of truth for "current state":
 - which Memory version is active
 - the canonical checksum of that Memory
 - product identity & EVOL protocol version
-- experiences counters
+- experience counters and reflection checkpoints
 - last reflection metadata
 - runtime view of anchors (with rule_hash)
 
@@ -93,13 +93,21 @@ class ManifestStore:
         last_id: str | None = None,
         oldest_kept: str | None = None,
     ) -> Manifest:
+        """Update the reflection checkpoint for consumed Experiences.
+
+        ``count`` and ``last_id`` are retained as legacy checkpoint fields.
+        The explicit ``reflected_*`` keys make the meaning clear for newer
+        callers without breaking existing manifests.
+        """
         m = self.read()
         m.experiences = {
             **m.experiences,
             "count": count,
+            "reflected_count": count,
         }
         if last_id is not None:
             m.experiences["last_id"] = last_id
+            m.experiences["reflected_last_id"] = last_id
         if oldest_kept is not None:
             m.experiences["oldest_kept"] = oldest_kept
         self.write(m)
@@ -167,6 +175,8 @@ def build_initial_manifest(
             "count": 0,
             "last_id": None,
             "oldest_kept": None,
+            "reflected_count": 0,
+            "reflected_last_id": None,
         },
         last_reflection=None,
         anchors=list(anchors or []),

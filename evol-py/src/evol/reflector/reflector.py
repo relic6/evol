@@ -14,17 +14,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from evol._version import PROTOCOL_VERSION
 from evol.concurrency import atomic_write_text, file_lock
 from evol.config.schema import Config
-from evol.core.canonical import canonical_yaml_dump
 from evol.core.ids import gen_reflection_id
 from evol.core.time_utils import utc_now_iso
 from evol.core.types import Anchor, Experience, Insight, Manifest, MemoryFile, MemoryKind
@@ -32,8 +32,6 @@ from evol.errors import EvolError, EvolLockError, EvolParseError
 from evol.llm.base import (
     DeferredLLMResponse,
     LLMClient,
-    LLMResponse,
-    Message,
 )
 from evol.logging import get_logger
 from evol.memory import (
@@ -174,7 +172,9 @@ class Reflector:
         # Count experiences since the last reflection. v0.1: simple total count.
         # For threshold trigger this is approximated by current count - last_count.
         total = self.recorder.count()
-        last_count = int(manifest.experiences.get("count", 0)) if manifest.experiences else 0
+        last_count = int(
+            manifest.experiences.get("reflected_count", manifest.experiences.get("count", 0))
+        ) if manifest.experiences else 0
         new_since = max(0, total - last_count)
         return self.trigger.should_fire(
             new_experiences_since_last=new_since,
@@ -355,7 +355,7 @@ class Reflector:
             current_version=int(manifest_before.memory.get("current_version", 0)),
         )
 
-        manifest_after = self.manifest_store.update_memory_pointer(
+        self.manifest_store.update_memory_pointer(
             version=new_version,
             checksum=new_checksum,
         )
@@ -526,7 +526,9 @@ class Reflector:
         all_exps: list[Experience],
         manifest: Manifest,
     ) -> list[Experience]:
-        last_id = (manifest.experiences or {}).get("last_id")
+        last_id = (manifest.experiences or {}).get("reflected_last_id") or (
+            manifest.experiences or {}
+        ).get("last_id")
         if not last_id:
             return all_exps
         # Take everything strictly *after* last_id (if present in list).
@@ -652,7 +654,7 @@ class Reflector:
             completed_at=utc_now_iso(),
         )
         # Write a minimal insights file so failed runs are still auditable.
-        try:
+        with suppress(EvolError):
             self._write_insights_md(
                 reflection_id=reflection_id,
                 result=result,
@@ -660,8 +662,6 @@ class Reflector:
                 rejected=[],
                 superseded=[],
             )
-        except EvolError:
-            pass
         return result
 
     # ───────────── iter helpers (used by tests) ─────────────
@@ -669,8 +669,7 @@ class Reflector:
     def iter_pending_deferred(self) -> Iterator[Path]:
         if not self.deferred_dir.is_dir():
             return
-        for p in sorted(self.deferred_dir.glob(f"*{DEFERRED_FILENAME_SUFFIX}")):
-            yield p
+        yield from sorted(self.deferred_dir.glob(f"*{DEFERRED_FILENAME_SUFFIX}"))
 
 
-__all__ = ["DEFERRED_FILENAME_SUFFIX", "Reflector", "ReflectionResult"]
+__all__ = ["DEFERRED_FILENAME_SUFFIX", "ReflectionResult", "Reflector"]

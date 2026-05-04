@@ -48,8 +48,11 @@ python -m pip install -e ".[dev]"
 
 ```bash
 evol --version
+evol --help
 python -c "from evol import Evol; print(Evol)"
 ```
+
+`evol --help` 会列出所有 11 个子命令（`init` / `status` / `reflect` / `memory` / `versions` / `diff` / `rollback` / `pause` / `resume` / `export` / `import`），不读完本文档也能从这里反查每个命令的用法。
 
 如果只想先体验，不需要配置 API key。后面的 30 天模拟使用的是内置 mock LLM。
 
@@ -68,13 +71,16 @@ python simulate_30_days.py
 
 - 每天产生一条 `Experience`
 - 每 3 天附加一次 `edited` 反馈信号
-- 每 5 条经验触发一次反思
+- 每 5 条经验触发一次反思（参考 `evol.config.yaml` 的 `reflection.threshold: 5`）
 - 反思结果沉淀进 `memory/*.yaml`
 - 每次记忆变更都会生成新快照
+
+跑完后控制台会显示从 `Day 0 — fresh .evol/` 到 `Day 30 — final state` 的演化过程，记忆版本会从 v0 递增到 v5~v6 左右，并能看到 `user_profile` / `domain_knowledge` / `self_awareness` 三类记忆里出现具体条目。
 
 跑完后查看生成物：
 
 ```bash
+cat .evol/manifest.yaml
 cat .evol/memory/user_profile.yaml
 cat .evol/memory/domain_knowledge.yaml
 cat .evol/memory/self_awareness.yaml
@@ -168,7 +174,7 @@ python journal_cli.py --feedback kept
 python journal_cli.py --feedback discarded
 ```
 
-示例配置在 `examples/journal-cli/evol.config.yaml`：
+示例配置 `examples/journal-cli/evol.config.yaml`（已经精简，实际文件还多了两条 anchor 和一段 `memory.retention`）：
 
 ```yaml
 schema_version: 1
@@ -222,12 +228,17 @@ anchors:
     kind: text
     rule: 这里写产品不能在成长中背离的原则
 
+# 启用哪些成长维度（v0.1 默认两层都开）
+growth:
+  knowledge_evolution: true       # 用户画像 / 领域经验 / 自我认知
+  inspirational_feedback: true    # 启发反哺
+
 reflection:
-  trigger: threshold
-  threshold: 20
+  trigger: threshold              # manual / threshold / scheduled
+  threshold: 20                   # 默认每积累 20 条 Experience 反思一次
 
 inspiration:
-  frequency: low
+  frequency: low                  # never / low / medium / high
   cooldown_hours: 24
   max_per_day: 2
 
@@ -235,11 +246,15 @@ llm:
   backend: auto
 ```
 
+所有字段都有合理默认值，开发者也可以只写 `product` 一节就跑起来；剩余配置 EVOL 会按上面注释里的默认值填充。
+
 初始化：
 
 ```bash
 evol init
 ```
+
+`evol init` 会在当前目录创建 `.evol/`，并把 `evol.config.yaml` 拷一份到 `.evol/config.yaml` 作为快照（运行时实际加载的仍是项目根的那一份）。
 
 ### 2. 在任务链路里加四个调用
 
@@ -264,22 +279,25 @@ def run_task(user_input: str) -> str:
 
     output = call_your_llm(prompt)
 
+    # end_task 返回 experience_id，下一节的 feedback 用它定位这条 Experience
     experience_id = evol.recorder.end_task(handle, output=output)
-    return output
+    return output, experience_id
 ```
 
 这四个点分别对应：
 
 | 调用 | 作用 | 是否阻塞核心链路 |
 |---|---|---|
-| `start_task` | 打开一条 Experience | 极轻，本地写 JSONL |
+| `start_task` | 打开一条 Experience，返回 `TaskHandle` | 极轻，本地写 JSONL |
 | `enhance` | 从 Memory 读取建议并追加到 prompt | 极轻，只读路径 |
-| `end_task` | 关闭 Experience | 极轻，本地写 JSONL |
-| `feedback` | 追加用户反馈信号 | 可选，但强烈建议 |
+| `end_task` | 关闭 Experience，返回 `experience_id` | 极轻，本地写 JSONL |
+| `feedback` | 给指定 `experience_id` 追加用户反馈信号 | 可选，但强烈建议 |
+
+四个调用都按"失败降级"语义实现：底层文件写失败只会打 warning，绝不抛回核心链路（详见第九节"常见问题"）。
 
 ### 3. 接入反馈
 
-当用户采纳、编辑、弃用、评分或评论结果时，把信号写回 EVOL：
+当用户采纳、编辑、弃用、评分或评论结果时，把信号写回 EVOL（用上一步 `end_task` 返回的 `experience_id`）：
 
 ```python
 from evol.core.time_utils import utc_now_iso
@@ -289,17 +307,31 @@ evol.recorder.feedback(
     experience_id,
     Signal(type="edited", ts=utc_now_iso(), source="explicit"),
 )
+
+# 带 value 的反馈：1-5 评分
+evol.recorder.feedback(
+    experience_id,
+    Signal(type="rated", ts=utc_now_iso(), value=4, source="explicit"),
+)
+
+# 带文本的反馈：自由评论
+evol.recorder.feedback(
+    experience_id,
+    Signal(type="comment", ts=utc_now_iso(), value="希望更简洁", source="explicit"),
+)
 ```
 
 常用信号：
 
-| 信号 | 语义 |
-|---|---|
-| `kept` | 用户原样采用 |
-| `edited` | 用户编辑后采用 |
-| `discarded` | 用户弃用 |
-| `rated` | 用户显式评分，`value` 通常是 1-5 |
-| `comment` | 用户自由评论，`value` 是文本 |
+| 信号 | 语义 | `value` |
+|---|---|---|
+| `kept` | 用户原样采用 | 不需要 |
+| `edited` | 用户编辑后采用 | 不需要 |
+| `discarded` | 用户弃用 | 不需要 |
+| `rated` | 用户显式评分 | int 1-5 |
+| `comment` | 用户自由评论 | 文本 |
+
+`source` 字段区分 `"explicit"`（用户主动反馈）和 `"implicit"`（产品根据行为推断，比如停留时间、复制行为）。两类都会被反思阶段使用，但权重不同。
 
 ### 4. 触发反思
 
@@ -333,16 +365,19 @@ if inspiration:
 
 ---
 
-## 七、三种 LLM 后端怎么选
+## 七、LLM 后端怎么选
+
+EVOL 抽象了三种真实后端，加上一种自动选择策略：
 
 | 后端 | 适合场景 | 配置 |
 |---|---|---|
-| `direct` | 独立 Python 工具，自带 API key | `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY` |
+| `direct` | 独立 Python 工具，自带 API key | 通过 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY` |
 | `subprocess` | 本机已经登录 `claude` / `codex` CLI | `llm.subprocess.command` |
 | `host` | EVOL 作为 Claude Code / Codex Skill 嵌入 | host agent 代办 LLM 请求 |
-| `auto` | 入门和默认生产配置 | 自动探测 |
 
-入门阶段建议先用 `auto`。当产品形态稳定后，再根据部署环境明确指定后端。
+`backend: auto` 是默认值，按以下顺序探测并落到上面三种之一：环境变量 `EVOL_LLM_BACKEND` → host agent 标记 → API key → 本地 `claude` / `codex` CLI。探测完成后表现完全等同于被选中的那一种后端。
+
+入门阶段建议先用 `auto`。当产品形态稳定后，再根据部署环境明确指定后端，避免环境差异导致行为漂移。详见 `LLM-BACKENDS.md`。
 
 ---
 
@@ -390,6 +425,25 @@ evol memory edit user_profile
 
 不会。v0.1 的进化只发生在四类轻量资产上：经验、洞察、记忆、提示词增强。代码、工作流和模型权重不在 EVOL v0.1 的自动修改范围内。
 
+### 调试期间如何"重置"或"冻结"成长？
+
+最常用的三种姿势：
+
+```bash
+# 完全重置：删掉 .evol/，下次跑 evol init 重建
+rm -rf .evol/
+
+# 临时冻结：保留所有资产，但停止反思与启发，advisor.enhance() 仍可读
+evol pause
+evol resume
+
+# 回到某个历史状态：先 list 再 rollback
+evol versions
+evol rollback 3 --yes
+```
+
+调试自有产品的 prompt 时，常见做法是：先 `evol pause` 锁住记忆 → 反复跑任务 → 满意后 `evol resume` 让反思继续。
+
 ---
 
 ## 十、下一步读什么
@@ -415,7 +469,7 @@ evol memory edit user_profile
 第 2 步：查看 .evol/memory、insights、versions
 第 3 步：用 evol status / memory / versions / diff / rollback 管理资产
 第 4 步：在自己的产品里加 start_task / enhance / end_task / feedback
-第 5 步：积累 20 条 Experience 后运行 evol reflect
+第 5 步：根据 config 中 reflection.threshold 触发反思（手动可用 evol reflect）
 第 6 步：观察 advisor.enhance 是否让输出更贴近用户
 第 7 步：谨慎开启 advisor.inspire，让产品开始反向启发用户
 ```

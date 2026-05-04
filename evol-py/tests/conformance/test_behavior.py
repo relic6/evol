@@ -16,7 +16,6 @@ from evol import Evol
 from evol.core.types import Signal
 from evol.llm import MockLLMClient
 
-
 pytestmark = pytest.mark.conformance
 
 
@@ -28,7 +27,7 @@ def evol(tmp_path: Path) -> Evol:
         encoding="utf-8",
     )
     e = Evol.from_config(p)
-    e._llm = MockLLMClient([])  # noqa: SLF001
+    e._llm = MockLLMClient([])
     return e
 
 
@@ -43,7 +42,7 @@ def test_start_returns_handle_synchronously(evol: Evol) -> None:
 
 def test_start_does_not_call_llm(evol: Evol) -> None:
     """CONTRACT §7.1: start_task MUST NOT call any LLM."""
-    evol._llm = MockLLMClient([])  # noqa: SLF001 — empty queue raises if called
+    evol._llm = MockLLMClient([])
     evol.recorder.start_task("x")
     # No exception ⇒ no LLM call.
 
@@ -106,7 +105,7 @@ def test_enhance_never_raises_even_on_corrupted_memory(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     evol = Evol.from_config(p)
-    evol._llm = MockLLMClient([])  # noqa: SLF001
+    evol._llm = MockLLMClient([])
     # Wreck the memory dir
     import shutil  # noqa: PLC0415
 
@@ -126,7 +125,7 @@ def test_enhance_returns_string(evol: Evol) -> None:
 def test_inspire_never_raises(evol: Evol) -> None:
     """CONTRACT §7.5: inspire MUST never raise."""
     # Throw a wild value into the LLM client
-    evol._llm = MockLLMClient(["totally not json"])  # noqa: SLF001
+    evol._llm = MockLLMClient(["totally not json"])
 
     # Push past warmup
     for i in range(12):
@@ -169,7 +168,7 @@ def test_reflect_writes_insights_file(tmp_path: Path) -> None:
             }
         ]
     )
-    evol._llm = MockLLMClient([fake])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake])
     result = evol.reflector.reflect()
     assert result.status == "completed"
     md_files = list((evol.evol_dir / "insights").glob("*.md"))
@@ -197,6 +196,17 @@ def test_pause_state_persists_across_restart(tmp_path: Path) -> None:
     a.pause()
     b = Evol.from_config(p)
     assert b.is_paused() is True
+
+
+def test_pause_disables_recording(evol: Evol) -> None:
+    evol.pause()
+    handle = evol.recorder.start_task("x")
+    eid = evol.recorder.end_task(handle, "y")
+    evol.recorder.feedback(eid, Signal(type="kept", ts="2026-05-03T14:00:00.000Z"))
+
+    assert evol.recorder.count() == 0
+    assert not (evol.evol_dir / "experiences.jsonl").read_text(encoding="utf-8").strip()
+    assert not (evol.evol_dir / "experiences.feedback.jsonl").read_text(encoding="utf-8").strip()
 
 
 # ─── snapshot / rollback ───
@@ -228,7 +238,25 @@ def test_rollback_does_not_delete_snapshots(tmp_path: Path) -> None:
     assert pre == post
 
 
-# ─── manifest is the source of truth ───
+# ─── status counters and reflection checkpoint ───
+
+
+def test_state_experience_count_tracks_recorder_before_reflection(tmp_path: Path) -> None:
+    p = tmp_path / "evol.config.yaml"
+    p.write_text(
+        "schema_version: 1\nproduct:\n  name: cts\n  version: 0.0.1\n",
+        encoding="utf-8",
+    )
+    evol = Evol.from_config(p)
+    h = evol.recorder.start_task("x")
+    evol.recorder.end_task(h, "y")
+
+    state = evol.state()
+    manifest = evol.manifest_store.read()
+    assert evol.recorder.count() == 1
+    assert state.experience_count == 1
+    assert state.reflected_experience_count == 0
+    assert manifest.experiences.get("count") == 0
 
 
 def test_manifest_records_experience_count_after_reflection(tmp_path: Path) -> None:
@@ -251,8 +279,13 @@ def test_manifest_records_experience_count_after_reflection(tmp_path: Path) -> N
             }
         ]
     )
-    evol._llm = MockLLMClient([fake])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake])
     evol.reflector.reflect()
     manifest = evol.manifest_store.read()
     assert manifest.experiences.get("count") == 3
+    assert manifest.experiences.get("reflected_count") == 3
+    assert manifest.experiences.get("reflected_last_id") is not None
+    state = evol.state()
+    assert state.experience_count == 3
+    assert state.reflected_experience_count == 3
     assert manifest.last_reflection is not None

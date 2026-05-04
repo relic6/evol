@@ -42,6 +42,7 @@ def cmd(ctx: click.Context, config_path: Path) -> None:
             "memory_version": state.memory_version,
             "memory_checksum": _short(state.memory_checksum),
             "experience_count": state.experience_count,
+            "reflected_experience_count": state.reflected_experience_count,
             "snapshot_versions": state.snapshot_versions,
             "last_reflection": _format_last_reflection(state),
             "runtime": paused_label,

@@ -127,6 +127,21 @@ def test_find_returns_none_when_missing(tmp_path: Path) -> None:
     assert rec.find("exp_unknown") is None
 
 
+def test_paused_recorder_ignores_start_end_feedback(tmp_path: Path) -> None:
+    paused_marker = tmp_path / "PAUSED"
+    paused_marker.touch()
+    rec = Recorder(tmp_path, paused_marker=paused_marker)
+    rec.ensure_initialized()
+
+    handle = rec.start_task("hi", task_kind="summarize")
+    eid = rec.end_task(handle, "bye")
+    rec.feedback(eid, Signal(type="kept", ts="2026-05-03T14:35:00.000Z"))
+
+    assert rec.count() == 0
+    assert not (tmp_path / "experiences.jsonl").read_text(encoding="utf-8").strip()
+    assert not (tmp_path / "experiences.feedback.jsonl").read_text(encoding="utf-8").strip()
+
+
 def test_main_log_is_canonical_jsonl(tmp_path: Path) -> None:
     rec = Recorder(tmp_path)
     rec.ensure_initialized()
