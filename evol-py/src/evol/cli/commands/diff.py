@@ -73,6 +73,6 @@ def _extract(snap: Path, dst: Path) -> None:
     dst.mkdir(parents=True, exist_ok=True)
     with tarfile.open(snap, "r:gz") as tar:
         try:
-            tar.extractall(dst, filter="data")  # type: ignore[arg-type]
+            tar.extractall(dst, filter="data")
         except TypeError:
-            tar.extractall(dst)  # noqa: S202
+            tar.extractall(dst)

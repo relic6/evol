@@ -85,4 +85,4 @@ def configure_default_handler(
 logging.getLogger(_BASE_NAME).addHandler(logging.NullHandler())
 
 
-__all__ = ["get_logger", "JsonFormatter", "configure_default_handler"]
+__all__ = ["JsonFormatter", "configure_default_handler", "get_logger"]

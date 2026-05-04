@@ -8,9 +8,7 @@ from pathlib import Path
 import pytest
 
 from evol import Evol
-from evol.config import load_config
 from evol.llm import HostAgentClient, MockLLMClient
-
 
 # ───────────────────────── direct-backend reflection ─────────────────────────
 
@@ -47,7 +45,7 @@ def test_reflection_cycle_completes_and_updates_memory(tmp_path: Path) -> None:
         ]
     )
     # Anchor filter check -> "PASS"; main reflection -> insights array
-    evol._llm = MockLLMClient([fake, "PASS"])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake, "PASS"])
 
     result = evol.reflector.reflect()
     assert result.status == "completed"
@@ -103,7 +101,7 @@ def test_reflection_anchor_rejects_violation(tmp_path: Path) -> None:
             },
         ]
     )
-    evol._llm = MockLLMClient([fake])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake])
 
     result = evol.reflector.reflect()
     assert result.status == "completed"
@@ -127,7 +125,7 @@ def test_reflection_anchor_rejects_violation(tmp_path: Path) -> None:
 def test_reflection_no_op_when_no_new_experiences(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     evol = Evol.from_config(config_path)
-    evol._llm = MockLLMClient([])  # noqa: SLF001
+    evol._llm = MockLLMClient([])
     result = evol.reflector.reflect()
     assert result.status == "no_op"
 
@@ -142,7 +140,7 @@ def test_reflection_parse_failure(tmp_path: Path) -> None:
         evol.recorder.end_task(h, f"y-{i}")
 
     # Garbage LLM output
-    evol._llm = MockLLMClient(["not even close to JSON"])  # noqa: SLF001
+    evol._llm = MockLLMClient(["not even close to JSON"])
     result = evol.reflector.reflect()
     assert result.status == "parse_failed"
 

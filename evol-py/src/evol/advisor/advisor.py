@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,7 +26,7 @@ from evol.advisor.retrieval import Candidate, Retrieval, derive_keys
 from evol.config.schema import Config
 from evol.core.ids import gen_deferred_request_id
 from evol.core.time_utils import utc_now_iso
-from evol.core.types import Anchor, Experience, MemoryEntry
+from evol.core.types import Anchor, Experience, MemoryEntry, MemoryKind
 from evol.errors import EvolError, EvolParseError
 from evol.llm.base import (
     DeferredLLMResponse,
@@ -47,6 +47,13 @@ _FREQUENCY_PROBS: dict[str, float] = {
 }
 _WARMUP_MIN_EXPERIENCES = 10
 _INSPIRATION_TEXT_PREVIEW_CHARS = 80
+_MEMORY_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
+_VALID_INSPIRATION_KINDS = ("pattern", "suggestion", "question", "insight")
+_InspirationKind = Literal["pattern", "suggestion", "question", "insight"]
 
 
 class Inspiration(BaseModel):
@@ -135,6 +142,7 @@ class Advisor:
         anchors: list[Anchor],
         memory_store: MemoryStore,
         recorder: Recorder,
+        paused_marker: str | Path | None = None,
     ) -> None:
         self.config = config
         self.evol_root = Path(evol_root)
@@ -142,10 +150,14 @@ class Advisor:
         self.anchors = anchors
         self.memory_store = memory_store
         self.recorder = recorder
+        self.paused_marker = Path(paused_marker) if paused_marker is not None else None
 
         self.retrieval = Retrieval()
         self.budget = BudgetManager(llm)
         self.history = InspirationHistory(self.evol_root)
+
+    def _is_paused(self) -> bool:
+        return self.paused_marker is not None and self.paused_marker.exists()
 
     # ───────────────────────── enhance ─────────────────────────
 
@@ -155,6 +167,8 @@ class Advisor:
         If anything goes wrong (memory missing, retrieval crashes, budget
         cannot be computed), returns the original ``prompt`` unchanged.
         """
+        if self._is_paused():
+            return prompt
         try:
             keys = derive_keys(prompt, task)
             memory = self.memory_store.load_all()
@@ -170,7 +184,7 @@ class Advisor:
         except EvolError as e:
             _log.warning("enhance failed", extra={"err": str(e)})
             return prompt
-        except Exception as e:  # noqa: BLE001  — never bubble up
+        except Exception as e:
             _log.warning("enhance unexpected exception", extra={"err": str(e)})
             return prompt
 
@@ -178,29 +192,27 @@ class Advisor:
 
     def inspire(self, *, task: dict[str, Any] | None = None) -> Inspiration | None:
         """Maybe surface an inspiration. Never raises. May return None."""
+        if self._is_paused():
+            return None
         try:
             return self._inspire_inner(task)
         except EvolError as e:
             _log.warning("inspire failed", extra={"err": str(e)})
             return None
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             _log.warning("inspire unexpected exception", extra={"err": str(e)})
             return None
 
     def _inspire_inner(self, task: dict[str, Any] | None) -> Inspiration | None:
         cfg = self.config.inspiration
-        # ── gate 1: frequency ──
-        if cfg.frequency == "never":
-            return None
-        # ── gate 2: cooldown ──
-        if self.history.in_cooldown(hours=cfg.cooldown_hours):
-            return None
-        # ── gate 3: daily quota ──
-        if self.history.count_today() >= cfg.max_per_day:
-            return None
-        # ── gate 4: warmup ──
         total_experiences = self.recorder.count()
-        if total_experiences < _WARMUP_MIN_EXPERIENCES:
+        gated = (
+            cfg.frequency == "never"
+            or self.history.in_cooldown(hours=cfg.cooldown_hours)
+            or self.history.count_today() >= cfg.max_per_day
+            or total_experiences < _WARMUP_MIN_EXPERIENCES
+        )
+        if gated:
             return None
 
         # ── coin flip ──
@@ -247,9 +259,7 @@ class Advisor:
         except EvolParseError as e:
             _log.warning("inspire parse failed", extra={"err": str(e)})
             return None
-        if out is None:
-            return None
-        if not out.text or not out.evidence_ids:
+        if out is None or not out.text or not out.evidence_ids:
             return None
         if self._anchor_violates(out.text):
             _log.info("inspire result rejected by anchor")
@@ -257,7 +267,7 @@ class Advisor:
 
         inspiration = Inspiration(
             text=out.text,
-            kind=out.kind if out.kind != "none" else "insight",  # type: ignore[arg-type]
+            kind=_normal_inspiration_kind(out.kind),
             evidence_ids=list(out.evidence_ids),
         )
         self._record(inspiration)
@@ -281,8 +291,8 @@ class Advisor:
         synthesize a soft, templated suggestion. Quiet by design."""
         memory = self.memory_store.load_all()
         best: tuple[float, MemoryEntry, str] | None = None
-        for kind in ("user_profile", "domain_knowledge", "self_awareness"):
-            mf = memory.get(kind)  # type: ignore[arg-type]
+        for kind in _MEMORY_KINDS:
+            mf = memory.get(kind)
             if mf is None:
                 continue
             for e in mf.entries:
@@ -360,7 +370,7 @@ class Advisor:
             return None
         inspiration = Inspiration(
             text=out.text,
-            kind=out.kind if out.kind != "none" else "insight",  # type: ignore[arg-type]
+            kind=_normal_inspiration_kind(out.kind),
             evidence_ids=list(out.evidence_ids),
         )
         self._record(inspiration)
@@ -429,6 +439,12 @@ class Advisor:
 def _entry_min_confidence(config: Config) -> float:
     # Future: read from config.advisor.min_confidence. For v0.1, fixed default.
     return 0.30
+
+
+def _normal_inspiration_kind(kind: str) -> _InspirationKind:
+    if kind in _VALID_INSPIRATION_KINDS:
+        return cast(_InspirationKind, kind)
+    return "insight"
 
 
 __all__ = [

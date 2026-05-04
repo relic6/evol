@@ -20,6 +20,11 @@ _KEYWORD_VALUE_HIT = 1
 _TASK_KIND_HIT = 2
 _RECENCY_BOOST = 1
 _WORD_RE = re.compile(r"[A-Za-z0-9_一-鿿]+")
+_MEMORY_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
 
 
 @dataclass
@@ -77,8 +82,8 @@ class Retrieval:
         ctx = ctx or {}
         keys_lower = [k.lower() for k in keys]
         candidates: list[Candidate] = []
-        for kind in ("user_profile", "domain_knowledge", "self_awareness"):
-            mf = memory.get(kind)  # type: ignore[arg-type]
+        for kind in _MEMORY_KINDS:
+            mf = memory.get(kind)
             if mf is None:
                 continue
             for entry in mf.entries:
@@ -154,7 +159,7 @@ class Retrieval:
     def _recent(entry: MemoryEntry) -> bool:
         try:
             last = parse_iso(entry.last_validated_at)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         delta = utc_now() - last
         return delta.days <= _RECENCY_DAYS

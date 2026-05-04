@@ -8,11 +8,8 @@ from pathlib import Path
 import pytest
 
 from evol import Evol
-from evol.advisor import Inspiration
-from evol.config import load_config
 from evol.core.types import MemoryEntry, MemoryFile, Signal
 from evol.llm import MockLLMClient
-
 
 # ─── helpers ───
 
@@ -68,7 +65,7 @@ def _seed_user_profile_entry(evol: Evol, *, key: str, value: str, confidence: fl
 def test_enhance_injects_memory_into_prompt(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     evol = Evol.from_config(config_path)
-    evol._llm = MockLLMClient([])  # noqa: SLF001  enhance shouldn't call LLM
+    evol._llm = MockLLMClient([])
 
     _seed_user_profile_entry(
         evol, key="summary_length", value="60-80 chars (short)"
@@ -89,7 +86,7 @@ def test_enhance_injects_memory_into_prompt(tmp_path: Path) -> None:
 def test_enhance_returns_unchanged_when_memory_empty(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     evol = Evol.from_config(config_path)
-    evol._llm = MockLLMClient([])  # noqa: SLF001
+    evol._llm = MockLLMClient([])
     original = "do something"
     out = evol.advisor.enhance(original, task={"task_kind": "x"})
     assert out == original
@@ -100,7 +97,7 @@ def test_enhance_never_raises_on_failure(tmp_path: Path) -> None:
     """enhance must always return *something* — original prompt on error."""
     config_path = _write_config(tmp_path)
     evol = Evol.from_config(config_path)
-    evol._llm = MockLLMClient([])  # noqa: SLF001
+    evol._llm = MockLLMClient([])
 
     # Wreck the memory dir to force an internal failure.
     import shutil  # noqa: PLC0415
@@ -117,7 +114,7 @@ def test_enhance_never_raises_on_failure(tmp_path: Path) -> None:
 def test_inspire_returns_none_before_warmup(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     evol = Evol.from_config(config_path)
-    evol._llm = MockLLMClient([])  # noqa: SLF001
+    evol._llm = MockLLMClient([])
     # Below warmup threshold (10 experiences)
     for i in range(3):
         h = evol.recorder.start_task(f"x-{i}")
@@ -137,7 +134,7 @@ def test_inspire_returns_inspiration_via_mock_llm(tmp_path: Path) -> None:
             "evidence_ids": ["exp_001", "exp_002"],
         }
     )
-    evol._llm = MockLLMClient([raw])  # noqa: SLF001
+    evol._llm = MockLLMClient([raw])
 
     # Push past warmup
     for i in range(12):
@@ -170,7 +167,7 @@ def test_inspire_anchor_rejection(tmp_path: Path) -> None:
             "evidence_ids": ["exp_1"],
         }
     )
-    evol._llm = MockLLMClient([raw])  # noqa: SLF001
+    evol._llm = MockLLMClient([raw])
 
     for i in range(12):
         h = evol.recorder.start_task(f"x-{i}")
@@ -193,7 +190,7 @@ def test_inspire_respects_cooldown(tmp_path: Path) -> None:
     raw = json.dumps(
         {"kind": "suggestion", "text": "x", "evidence_ids": ["exp_1"]}
     )
-    evol._llm = MockLLMClient([raw, raw])  # noqa: SLF001
+    evol._llm = MockLLMClient([raw, raw])
 
     for i in range(12):
         h = evol.recorder.start_task(f"in-{i}")
@@ -219,7 +216,7 @@ def test_inspire_respects_daily_quota(tmp_path: Path) -> None:
     raw = json.dumps(
         {"kind": "suggestion", "text": "x", "evidence_ids": ["exp_1"]}
     )
-    evol._llm = MockLLMClient([raw, raw])  # noqa: SLF001
+    evol._llm = MockLLMClient([raw, raw])
 
     for i in range(12):
         h = evol.recorder.start_task(f"x-{i}")
@@ -300,7 +297,7 @@ def test_100_tasks_then_reflect_then_enhance_picks_up_memory(tmp_path: Path) -> 
             }
         ]
     )
-    evol._llm = MockLLMClient([insight_response])  # noqa: SLF001
+    evol._llm = MockLLMClient([insight_response])
 
     # Generate 100 tasks
     for i in range(100):

@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import tarfile
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 from evol.errors import EvolStorageError
@@ -42,22 +43,16 @@ def atomic_write_bytes(path: str | Path, content: bytes) -> None:
         with os.fdopen(fd, "wb") as f:
             f.write(content)
             f.flush()
-            try:
+            with suppress(OSError):
                 os.fsync(f.fileno())
-            except OSError:
-                # fsync may not be supported (e.g. on some network FS); the
-                # rename below remains atomic on POSIX.
-                pass
         os.replace(tmp, p)
     except OSError as e:
         raise EvolStorageError(f"atomic write failed for {p}: {e}") from e
     finally:
         # If we crashed before the os.replace, clean up the orphan tmp file.
         if tmp.exists() and tmp != p:
-            try:
+            with suppress(OSError):
                 tmp.unlink()
-            except OSError:
-                pass
 
 
 def make_snapshot_tar(src_dir: str | Path, dst_path: str | Path) -> Path:
@@ -89,10 +84,8 @@ def make_snapshot_tar(src_dir: str | Path, dst_path: str | Path) -> Path:
         raise EvolStorageError(f"snapshot creation failed for {dst}: {e}") from e
     finally:
         if tmp.exists() and tmp != dst:
-            try:
+            with suppress(OSError):
                 tmp.unlink()
-            except OSError:
-                pass
     return dst
 
 
@@ -114,10 +107,10 @@ def extract_snapshot_tar(src_path: str | Path, dst_dir: str | Path) -> Path:
             for member in tar.getmembers():
                 _safety_check_member(member, dst)
             try:
-                tar.extractall(dst, filter="data")  # type: ignore[arg-type]
+                tar.extractall(dst, filter="data")
             except TypeError:
                 # Python < 3.12 fallback (no filter kwarg)
-                tar.extractall(dst)  # noqa: S202
+                tar.extractall(dst)
     except (OSError, tarfile.TarError) as e:
         raise EvolStorageError(f"snapshot extraction failed for {src}: {e}") from e
     return dst
@@ -131,7 +124,7 @@ def _safety_check_member(member: tarfile.TarInfo, dst: Path) -> None:
     if member.issym() or member.islnk():
         target = member.linkname
         if target.startswith("/") or ".." in Path(target).parts:
-            raise EvolStorageError(f"unsafe tar member link: {name!r} → {target!r}")
+            raise EvolStorageError(f"unsafe tar member link: {name!r} -> {target!r}")
 
 
 __all__ = [

@@ -6,7 +6,7 @@ Requires ``pip install evol-kit[openai]``.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from evol.errors import EvolLLMError
 from evol.llm.base import LLMBackendKind, LLMClient, LLMResponse, Message
@@ -51,15 +51,16 @@ class OpenAIClient(LLMClient):
         temperature: float = 0.7,
         timeout: float = 120.0,
     ) -> LLMResponse:
+        api_messages = [{"role": m.role, "content": m.content} for m in messages]
         try:
             resp = self._client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
+                messages=cast(Any, api_messages),
                 max_tokens=max_tokens,
                 temperature=temperature,
                 timeout=timeout,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise EvolLLMError(f"OpenAI call failed: {e}") from e
 
         choice = resp.choices[0] if getattr(resp, "choices", None) else None

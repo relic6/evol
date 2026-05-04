@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -56,7 +56,7 @@ def _coerce_to_array(payload: Any) -> list[Any]:
     if isinstance(payload, list):
         return payload
     if isinstance(payload, dict) and isinstance(payload.get("insights"), list):
-        return payload["insights"]
+        return cast(list[Any], payload["insights"])
     raise EvolParseError(
         f"expected a JSON array (or {{'insights': [...]}}), got {type(payload).__name__}"
     )

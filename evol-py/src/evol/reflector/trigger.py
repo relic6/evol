@@ -8,6 +8,8 @@ the answer is yes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any, cast
 
 from evol.config import ReflectionConfig
 from evol.errors import EvolConfigError
@@ -64,7 +66,7 @@ class ScheduledTrigger(TriggerBase):
     def __init__(self, cron: str) -> None:
         self.cron = cron
         try:
-            from croniter import croniter  # noqa: PLC0415
+            from croniter import croniter  # type: ignore[import-untyped]  # noqa: PLC0415
 
             self._croniter = croniter
             self._available = True
@@ -86,8 +88,9 @@ class ScheduledTrigger(TriggerBase):
         from evol.core.time_utils import parse_iso, utc_now  # noqa: PLC0415
 
         base = parse_iso(last_reflection_at)
-        itr = self._croniter(self.cron, base)  # type: ignore[misc]
-        next_fire = itr.get_next(ret_type=type(base))
+        cron_factory = cast(Any, self._croniter)
+        itr = cron_factory(self.cron, base)
+        next_fire = cast(datetime, itr.get_next(ret_type=type(base)))
         return utc_now() >= next_fire
 
 

@@ -13,11 +13,17 @@ to lean on the structured schema rather than improvise.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from evol.core.types import Anchor, Experience, MemoryFile, MemoryKind
 from evol.llm.base import Message
 
 _DOMAIN_FALLBACK = "general"
+_MEMORY_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
 
 _SYSTEM_TEMPLATE = """\
 You are an Evolution Reflector.
@@ -115,8 +121,8 @@ class PromptBuilder:
 
     def _memory_block(self, memory: dict[MemoryKind, MemoryFile]) -> str:
         lines: list[str] = []
-        for kind in ("user_profile", "domain_knowledge", "self_awareness"):
-            mf = memory.get(kind)  # type: ignore[arg-type]
+        for kind in _MEMORY_KINDS:
+            mf = memory.get(kind)
             entries = mf.entries if mf else []
             lines.append(f"## {kind}")
             if not entries:
@@ -154,15 +160,15 @@ class PromptBuilder:
             f"signals: {signals}"
         )
 
-    def _format_signal(self, s) -> str:  # type: ignore[no-untyped-def]
+    def _format_signal(self, s: Any) -> str:
         if s.value is None:
-            return s.type
+            return str(s.type)
         return f"{s.type}={s.value}"
 
     def _stringify(self, value: object) -> str:
         if value is None:
             return "—"
-        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        text = value if isinstance(value, str) else str(json.dumps(value, ensure_ascii=False))
         if len(text) > self.max_input_chars:
             return text[: self.max_input_chars] + " …(truncated)"
         return text

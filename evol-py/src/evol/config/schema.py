@@ -128,6 +128,7 @@ class LLMHostConfig(BaseModel):
     purpose_whitelist: list[str] = Field(
         default_factory=lambda: ["reflection", "anchor_check", "inspiration"]
     )
+    anchor_text_strategy: Literal["fail_safe", "allow"] = "fail_safe"
 
 
 class LLMConfig(BaseModel):

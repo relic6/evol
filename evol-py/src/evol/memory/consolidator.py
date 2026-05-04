@@ -36,6 +36,11 @@ from evol.logging import get_logger
 _log = get_logger("evol.memory.consolidator")
 
 _RETIRE_THRESHOLD = 0.10
+_MEMORY_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
 
 
 def confidence_cap_for_evidence_count(n: int) -> float:
@@ -93,8 +98,9 @@ class Consolidator:
                     extra={"scope": scope, "key": key},
                 )
                 continue
+            memory_scope = scope
             try:
-                self._apply_one(top, files[scope], extra_evidence=_collect_evidence(others))
+                self._apply_one(top, files[memory_scope], extra_evidence=_collect_evidence(others))
                 applied.append(top.model_copy(update={"status": "applied",
                                                         "applied_to": f"mem_{scope}#{key}"}))
             except EvolError as e:
@@ -108,7 +114,7 @@ class Consolidator:
                 superseded.append(sup.model_copy(update={"status": "superseded"}))
 
         # Bump version + last_updated on touched files.
-        touched = {ins.scope for ins in applied}
+        touched = {ins.scope for ins in applied if ins.scope in _MEMORY_KINDS}
         now = utc_now_iso()
         for scope in touched:
             mf = files[scope]

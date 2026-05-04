@@ -27,7 +27,6 @@ from evol.core.types import (
     Signal,
 )
 
-
 pytestmark = pytest.mark.conformance
 
 

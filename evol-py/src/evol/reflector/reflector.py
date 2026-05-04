@@ -43,7 +43,7 @@ from evol.memory import (
 )
 from evol.recorder import Recorder
 from evol.reflector.batcher import Batcher
-from evol.reflector.filter import AnchorFilter
+from evol.reflector.filter import AnchorFilter, HostTextStrategy
 from evol.reflector.parser import parse_insights
 from evol.reflector.prompt import PromptBuilder
 from evol.reflector.trigger import build_trigger
@@ -141,6 +141,8 @@ class Reflector:
         memory_store: MemoryStore,
         manifest_store: ManifestStore,
         snapshot_manager: SnapshotManager,
+        paused_marker: str | Path | None = None,
+        host_text_strategy: HostTextStrategy = "fail_safe",
     ) -> None:
         self.config = config
         self.evol_root = Path(evol_root)
@@ -150,9 +152,14 @@ class Reflector:
         self.memory_store = memory_store
         self.manifest_store = manifest_store
         self.snapshot_manager = snapshot_manager
+        self.paused_marker = Path(paused_marker) if paused_marker is not None else None
 
         self.consolidator = Consolidator()
-        self.anchor_filter = AnchorFilter(anchors=anchors, llm=llm)
+        self.anchor_filter = AnchorFilter(
+            anchors=anchors,
+            llm=llm,
+            host_text_strategy=host_text_strategy,
+        )
         self.prompt_builder = PromptBuilder()
         self.batcher = Batcher(
             max_experiences_per_run=config.reflection.max_experiences_per_run
@@ -164,9 +171,14 @@ class Reflector:
         self.deferred_dir.mkdir(parents=True, exist_ok=True)
         self.insights_dir.mkdir(parents=True, exist_ok=True)
 
+    def _is_paused(self) -> bool:
+        return self.paused_marker is not None and self.paused_marker.exists()
+
     # ───────────── public API ─────────────
 
     def should_fire(self, *, manifest: Manifest | None = None) -> bool:
+        if self._is_paused():
+            return False
         manifest = manifest or self.manifest_store.read()
         last_at = (manifest.last_reflection or {}).get("performed_at") if manifest.last_reflection else None
         # Count experiences since the last reflection. v0.1: simple total count.
@@ -188,6 +200,13 @@ class Reflector:
         all failure modes surface as a non-completed status field.
         """
         reflection_id = gen_reflection_id()
+        if self._is_paused():
+            return ReflectionResult(
+                reflection_id=reflection_id,
+                status="skipped",
+                notes="EVOL is paused",
+                completed_at=utc_now_iso(),
+            )
         try:
             with file_lock(self.evol_root / self.LOCK_FILENAME, timeout=2.0):
                 return self._reflect_inside_lock(reflection_id)
@@ -205,6 +224,8 @@ class Reflector:
         one whose completed response has arrived, run the consolidation tail
         of the reflection flow. Idempotent."""
         results: list[ReflectionResult] = []
+        if self._is_paused():
+            return results
         if not self.deferred_dir.is_dir():
             return results
 

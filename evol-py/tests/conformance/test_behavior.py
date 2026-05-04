@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from evol import Evol
-from evol.core.types import Signal
+from evol.core.types import MemoryEntry, Signal
 from evol.llm import MockLLMClient
 
 pytestmark = pytest.mark.conformance
@@ -207,6 +207,37 @@ def test_pause_disables_recording(evol: Evol) -> None:
     assert evol.recorder.count() == 0
     assert not (evol.evol_dir / "experiences.jsonl").read_text(encoding="utf-8").strip()
     assert not (evol.evol_dir / "experiences.feedback.jsonl").read_text(encoding="utf-8").strip()
+
+
+def test_pause_disables_advisor_and_reflector(evol: Evol) -> None:
+    mem = evol.memory_store.load("user_profile")
+    mem.entries.append(
+        MemoryEntry(
+            key="summary_length",
+            value="prefer concise summaries",
+            confidence=0.90,
+            evidence_ids=["exp_seed"],
+            rationale="seed",
+            created_at="2026-05-03T14:00:00.000Z",
+            last_validated_at="2026-05-03T14:00:00.000Z",
+            last_revision_id="ins_seed",
+        )
+    )
+    evol.memory_store.save("user_profile", mem)
+    for i in range(12):
+        h = evol.recorder.start_task(f"x-{i}")
+        evol.recorder.end_task(h, f"y-{i}")
+
+    evol.pause()
+    evol._llm = MockLLMClient(["[]"])
+
+    prompt = "summary please"
+    assert evol.advisor.enhance(prompt, task={"task_kind": "summary"}) == prompt
+    assert evol.advisor.inspire(task={"task_kind": "summary"}) is None
+    assert evol.reflector.should_fire() is False
+    result = evol.reflector.reflect()
+    assert result.status == "skipped"
+    assert result.notes == "EVOL is paused"
 
 
 # ─── snapshot / rollback ───

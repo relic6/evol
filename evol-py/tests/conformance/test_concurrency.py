@@ -17,7 +17,6 @@ from evol.concurrency import atomic_write_text, file_lock
 from evol.core.types import Experience
 from evol.errors import EvolLockError
 
-
 pytestmark = pytest.mark.conformance
 
 
@@ -148,7 +147,7 @@ def test_concurrent_jsonl_appends_no_torn_lines(tmp_path: Path) -> None:
     # Every line in the JSONL must be a valid Experience
     raw = (evol.evol_dir / "experiences.jsonl").read_text(encoding="utf-8")
     lines = [ln for ln in raw.splitlines() if ln.strip()]
-    # 4 threads × 10 iterations × 2 lines (open + closed) = 80
+    # 4 threads x 10 iterations x 2 lines (open + closed) = 80
     assert len(lines) == 80
     import json  # noqa: PLC0415
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from evol.core.types import Anchor, Insight, Rejection
 from evol.errors import EvolError
@@ -32,6 +33,7 @@ _log = get_logger("evol.reflector.filter")
 
 _VERDICT_PASS = "pass"
 _VERDICT_REJECT = "reject"
+HostTextStrategy = Literal["fail_safe", "allow"]
 
 _TEXT_ANCHOR_SYSTEM = """\
 You are an EVOL Anchor Validator.
@@ -58,12 +60,12 @@ class AnchorFilter:
         anchors: list[Anchor],
         *,
         llm: LLMClient | None = None,
-        host_text_strategy: str = "fail_safe",
+        host_text_strategy: HostTextStrategy = "fail_safe",
     ) -> None:
         self.anchors = anchors
         self.llm = llm
         # ``fail_safe`` (default): host backend treats text/semantic as conflict.
-        # ``allow``: assume PASS when we can't evaluate; useful for tests.
+        # ``allow``: assume PASS when the product explicitly accepts that risk.
         self.host_text_strategy = host_text_strategy
 
     def filter(self, insights: list[Insight]) -> FilterOutcome:
@@ -123,13 +125,7 @@ class AnchorFilter:
         if self.llm is None:
             return True
         if not self.llm.is_synchronous:
-            if self.host_text_strategy == "allow":
-                return False
-            _log.info(
-                "host backend cannot synchronously evaluate text anchor — fail-safe reject",
-                extra={"insight_id": ins.id, "anchor_index": anchor.index},
-            )
-            return True
+            return self._host_text_conflict(ins, anchor)
 
         messages = [
             Message(role="system", content=_TEXT_ANCHOR_SYSTEM),
@@ -151,6 +147,9 @@ class AnchorFilter:
             # Synchronous client returned a deferred? Treat as fail-safe reject.
             return True
 
+        return self._verdict_conflict(resp, ins)
+
+    def _verdict_conflict(self, resp: LLMResponse, ins: Insight) -> bool:
         verdict = resp.text.strip().lower()
         if verdict.startswith(_VERDICT_PASS):
             return False
@@ -163,5 +162,14 @@ class AnchorFilter:
         )
         return True
 
+    def _host_text_conflict(self, ins: Insight, anchor: Anchor) -> bool:
+        if self.host_text_strategy == "allow":
+            return False
+        _log.info(
+            "host backend cannot synchronously evaluate text anchor — fail-safe reject",
+            extra={"insight_id": ins.id, "anchor_index": anchor.index},
+        )
+        return True
 
-__all__ = ["AnchorFilter", "FilterOutcome"]
+
+__all__ = ["AnchorFilter", "FilterOutcome", "HostTextStrategy"]

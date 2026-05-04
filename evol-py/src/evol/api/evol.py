@@ -143,6 +143,12 @@ class Evol:
                 memory_store=self.memory_store,
                 manifest_store=self.manifest_store,
                 snapshot_manager=self.snapshot_manager,
+                paused_marker=self.paused_marker,
+                host_text_strategy=(
+                    self.config.llm.host.anchor_text_strategy
+                    if self.config.llm.host is not None
+                    else "fail_safe"
+                ),
             )
         return self._reflector
 
@@ -157,6 +163,7 @@ class Evol:
                 anchors=anchors,
                 memory_store=self.memory_store,
                 recorder=self.recorder,
+                paused_marker=self.paused_marker,
             )
         return self._advisor
 

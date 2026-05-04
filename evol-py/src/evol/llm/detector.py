@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
+from typing import Literal, cast
 
 from evol.config.schema import Config
 from evol.errors import EvolConfigError
@@ -24,6 +25,7 @@ from evol.llm.base import LLMClient
 from evol.logging import get_logger
 
 _log = get_logger("evol.llm.detector")
+_BackendName = Literal["direct", "subprocess", "host", "auto"]
 
 
 def detect_backend(
@@ -42,18 +44,18 @@ def detect_backend(
         EvolConfigError: if no backend can be determined or required state
             for the chosen backend is missing.
     """
-    backend = config.llm.backend
+    backend: _BackendName = config.llm.backend
     if backend == "auto":
         backend = _auto_detect()
 
     return _build(backend, config, evol_root)
 
 
-def _auto_detect() -> str:
+def _auto_detect() -> _BackendName:
     explicit = os.environ.get("EVOL_BACKEND", "").strip().lower()
     if explicit in {"direct", "subprocess", "host"}:
         _log.info("backend chosen by EVOL_BACKEND env var", extra={"backend": explicit})
-        return explicit
+        return cast(_BackendName, explicit)
 
     host_marker = os.environ.get("EVOL_HOST_AGENT", "").strip().lower()
     if host_marker:

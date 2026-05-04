@@ -10,12 +10,11 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-
 _console = Console()
 
 
 def info(msg: str) -> None:
-    _console.print(f"[bold cyan]›[/bold cyan] {msg}")
+    _console.print(f"[bold cyan]>[/bold cyan] {msg}")
 
 
 def success(msg: str) -> None:

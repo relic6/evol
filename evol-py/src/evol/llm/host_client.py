@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal
 
 from evol._version import PROTOCOL_VERSION, __version__
 from evol.concurrency import atomic_write_text
@@ -31,7 +30,6 @@ from evol.llm.base import (
     LLMResponse,
     Message,
 )
-
 
 # Schema text shown to host agents inside the markdown request, so they know
 # what JSON shape we expect back. Indented inside a fenced code block.

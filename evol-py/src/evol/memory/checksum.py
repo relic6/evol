@@ -7,6 +7,8 @@ core layer's dict-of-dicts API.
 
 from __future__ import annotations
 
+from typing import Any
+
 from evol.core.canonical import compute_memory_checksum
 from evol.core.types import MemoryFile, MemoryKind
 
@@ -17,7 +19,9 @@ def compute_checksum_from_memory(
     memory_files: dict[MemoryKind, MemoryFile],
 ) -> str:
     """Compute the canonical sha256 over a mapping of in-memory MemoryFiles."""
-    raw = {k: v.model_dump(exclude_none=False) for k, v in memory_files.items()}
+    raw: dict[str, dict[str, Any]] = {
+        k: v.model_dump(exclude_none=False) for k, v in memory_files.items()
+    }
     return compute_memory_checksum(raw)
 
 

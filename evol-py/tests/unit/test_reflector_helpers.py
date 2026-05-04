@@ -17,7 +17,7 @@ from evol.core.types import (
     Signal,
 )
 from evol.errors import EvolParseError
-from evol.llm import MockLLMClient
+from evol.llm import LLMBackendKind, MockLLMClient
 from evol.memory.consolidator import (
     Consolidator,
     confidence_cap_for_evidence_count,
@@ -32,8 +32,12 @@ from evol.reflector.trigger import (
     build_trigger,
 )
 
-
 # ───────────────────────── triggers ─────────────────────────
+
+
+class HostLikeMockLLM(MockLLMClient):
+    backend_kind = LLMBackendKind.HOST
+    is_synchronous = False
 
 
 def test_manual_trigger_never_fires() -> None:
@@ -74,7 +78,7 @@ def test_build_trigger_scheduled_requires_schedule() -> None:
 def test_scheduled_trigger_no_croniter_returns_false() -> None:
     """If croniter isn't installed, should_fire returns False (manual fallback)."""
     t = ScheduledTrigger("0 * * * *")
-    if not t._available:  # noqa: SLF001
+    if not t._available:
         assert t.should_fire(new_experiences_since_last=999, last_reflection_at=None) is False
 
 
@@ -305,6 +309,26 @@ def test_anchor_filter_text_no_llm_fail_safe() -> None:
     f = AnchorFilter(anchors=[_anchor(0, "text", "no x")], llm=None)
     out = f.filter([_ins("user_profile", "k", "claim")])
     assert len(out.rejected) == 1
+
+
+def test_anchor_filter_host_text_default_fail_safe() -> None:
+    f = AnchorFilter(
+        anchors=[_anchor(0, "text", "no x")],
+        llm=HostLikeMockLLM([]),
+    )
+    out = f.filter([_ins("user_profile", "k", "claim")])
+    assert len(out.rejected) == 1
+
+
+def test_anchor_filter_host_text_allow_strategy_approves() -> None:
+    f = AnchorFilter(
+        anchors=[_anchor(0, "text", "no x")],
+        llm=HostLikeMockLLM([]),
+        host_text_strategy="allow",
+    )
+    out = f.filter([_ins("user_profile", "k", "claim")])
+    assert len(out.approved) == 1
+    assert len(out.rejected) == 0
 
 
 # ───────────────────────── consolidator ─────────────────────────

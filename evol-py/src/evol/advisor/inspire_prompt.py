@@ -63,6 +63,11 @@ Recent Experiences (chronological):
 
 Generate one inspiration if it would genuinely help the user. Otherwise,
 return "none". Return only the JSON object."""
+_MEMORY_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
 
 
 def build_inspire_prompt(
@@ -70,7 +75,7 @@ def build_inspire_prompt(
     anchors: list[Anchor],
     memory: dict[MemoryKind, MemoryFile],
     recent_experiences: list[Experience],
-    domain: str | None = None,  # noqa: ARG001  (kept for symmetry; unused in v0.1)
+    domain: str | None = None,
     top_n: int = 6,
 ) -> list[Message]:
     """Render the system + user messages for an inspire LLM call."""
@@ -81,10 +86,7 @@ def build_inspire_prompt(
 
 
 def _system_text(anchors: list[Anchor]) -> str:
-    if anchors:
-        block = "\n".join(f"  [{a.index}] {a.rule}" for a in anchors)
-    else:
-        block = "  (none)"
+    block = "\n".join(f"  [{a.index}] {a.rule}" for a in anchors) if anchors else "  (none)"
     return _SYSTEM_TEMPLATE.format(anchors_block=block)
 
 
@@ -102,8 +104,8 @@ def _user_text(
 
 def _memory_block(memory: dict[MemoryKind, MemoryFile], *, top_n: int) -> str:
     rows: list[tuple[float, str]] = []
-    for kind in ("user_profile", "domain_knowledge", "self_awareness"):
-        mf = memory.get(kind)  # type: ignore[arg-type]
+    for kind in _MEMORY_KINDS:
+        mf = memory.get(kind)
         if mf is None:
             continue
         for e in mf.entries:

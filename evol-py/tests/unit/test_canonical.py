@@ -18,7 +18,6 @@ from evol.core.canonical import (
     compute_memory_checksum,
 )
 
-
 # ─── canonical_yaml_dump ───
 
 

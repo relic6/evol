@@ -13,7 +13,9 @@ CONTRACT §9 / §12 require:
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -66,17 +68,14 @@ class JsonlStore:
 
         lock_path = self.path.with_suffix(self.path.suffix + ".lock")
         try:
-            with file_lock(lock_path, exclusive=True, timeout=10.0):
-                with self.path.open("a", encoding="utf-8") as f:
-                    f.write(payload)
-                    f.flush()
-                    try:
-                        import os  # noqa: PLC0415
-
-                        os.fsync(f.fileno())
-                    except OSError:
-                        # fsync may not be supported on some FS; tolerable.
-                        pass
+            with (
+                file_lock(lock_path, exclusive=True, timeout=10.0),
+                self.path.open("a", encoding="utf-8") as f,
+            ):
+                f.write(payload)
+                f.flush()
+                with suppress(OSError):
+                    os.fsync(f.fileno())
         except OSError as e:
             raise EvolStorageError(f"append failed for {self.path}: {e}") from e
 

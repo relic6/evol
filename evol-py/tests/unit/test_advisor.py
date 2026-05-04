@@ -8,7 +8,6 @@ import pytest
 
 from evol.advisor import (
     BudgetManager,
-    Inspiration,
     InspirationHistory,
     InspirationRecord,
     Retrieval,
@@ -24,7 +23,6 @@ from evol.advisor.retrieval import Candidate
 from evol.core.types import MemoryEntry, MemoryFile
 from evol.errors import EvolParseError
 from evol.llm import MockLLMClient
-
 
 # ─── derive_keys ───
 

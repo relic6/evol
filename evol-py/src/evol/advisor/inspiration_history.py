@@ -67,10 +67,12 @@ class InspirationHistory:
             separators=(",", ":"),
         ) + "\n"
         try:
-            with file_lock(self.path.with_suffix(self.path.suffix + ".lock"), timeout=5.0):
-                with self.path.open("a", encoding="utf-8") as f:
-                    f.write(line)
-                    f.flush()
+            with (
+                file_lock(self.path.with_suffix(self.path.suffix + ".lock"), timeout=5.0),
+                self.path.open("a", encoding="utf-8") as f,
+            ):
+                f.write(line)
+                f.flush()
         except OSError as e:
             raise EvolStorageError(f"inspiration history append failed: {e}") from e
 
@@ -81,12 +83,12 @@ class InspirationHistory:
             return []
         out: list[dict[str, Any]] = []
         with self.path.open("r", encoding="utf-8") as f:
-            for raw in f:
-                raw = raw.strip()
-                if not raw:
+            for line in f:
+                stripped = line.strip()
+                if not stripped:
                     continue
                 try:
-                    out.append(json.loads(raw))
+                    out.append(json.loads(stripped))
                 except json.JSONDecodeError:
                     _log.warning("skipping malformed inspiration history line")
                     continue
@@ -108,7 +110,7 @@ class InspirationHistory:
             return False
         try:
             last_dt = parse_iso(last)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         return (utc_now() - last_dt) < timedelta(hours=hours)
 

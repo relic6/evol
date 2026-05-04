@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from evol.advisor.retrieval import Candidate
 from evol.llm.base import LLMClient
 
-
 _DEFAULT_MAX_TOKENS = 600
 _DEFAULT_RATIO = 0.30
 _MIN_BUDGET = 60   # always allow at least a tiny block, even on tiny prompts

@@ -46,12 +46,12 @@ class EvolStorageError(EvolError):
 
 
 __all__ = [
-    "EvolError",
-    "EvolConfigError",
-    "EvolProtocolMismatch",
     "EvolChecksumError",
-    "EvolLockError",
+    "EvolConfigError",
+    "EvolError",
     "EvolLLMError",
+    "EvolLockError",
     "EvolParseError",
+    "EvolProtocolMismatch",
     "EvolStorageError",
 ]

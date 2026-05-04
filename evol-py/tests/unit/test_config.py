@@ -18,7 +18,6 @@ from evol.config import (
 from evol.config.schema import AnchorConfig
 from evol.errors import EvolConfigError
 
-
 # ─── load_config / schema validation ───
 
 
@@ -34,6 +33,7 @@ def test_load_minimal_config(tmp_path: Path, minimal_config_yaml: str) -> None:
     assert config.inspiration.frequency == "low"
     assert config.inspiration.host_strategy == "defer"
     assert config.llm.backend == "auto"
+    assert config.llm.host is None
 
 
 def test_load_full_config(tmp_path: Path) -> None:
@@ -48,7 +48,7 @@ product:
 anchors:
   - description: 不杜撰
     kind: text
-    rule: 总结必须忠实于原文，不杜撰
+    rule: 总结必须忠实于原文,不杜撰
   - description: 同语言
     kind: text
     rule: 输出语言与输入保持一致
@@ -78,6 +78,27 @@ llm:
     assert config.llm.backend == "direct"
     assert config.llm.direct is not None
     assert config.llm.direct.model == "claude-sonnet-4-6"
+
+
+def test_load_host_anchor_text_strategy(tmp_path: Path) -> None:
+    p = tmp_path / "evol.config.yaml"
+    p.write_text(
+        """
+schema_version: 1
+product:
+  name: host-cli
+  version: 0.1.0
+llm:
+  backend: host
+  host:
+    request_ttl_hours: 24
+    anchor_text_strategy: allow
+""",
+        encoding="utf-8",
+    )
+    config = load_config(p)
+    assert config.llm.host is not None
+    assert config.llm.host.anchor_text_strategy == "allow"
 
 
 def test_load_config_missing_file(tmp_path: Path) -> None:

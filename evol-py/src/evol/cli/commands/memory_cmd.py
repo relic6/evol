@@ -15,7 +15,11 @@ from evol.config import load_config
 from evol.core.types import MemoryKind
 from evol.errors import EvolError
 
-_VALID_KINDS = ("user_profile", "domain_knowledge", "self_awareness")
+_VALID_KINDS: tuple[MemoryKind, ...] = (
+    "user_profile",
+    "domain_knowledge",
+    "self_awareness",
+)
 
 
 def _open_evol(ctx: click.Context, config_path: Path) -> Evol:
@@ -89,7 +93,7 @@ def show(ctx: click.Context, kind: str | None, config_path: Path) -> None:
 def edit(ctx: click.Context, kind: str, config_path: Path) -> None:
     evol = _open_evol(ctx, config_path)
     typed_kind: MemoryKind = _validated_kind(kind)
-    path = evol.memory_store._path(typed_kind)  # noqa: SLF001 — well-known internal helper
+    path = evol.memory_store._path(typed_kind)
 
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or _default_editor()
     if not shutil.which(editor.split()[0]):
@@ -120,7 +124,7 @@ def _validated_kind(s: str) -> MemoryKind:
         raise click.BadParameter(
             f"unknown kind {s!r}; expected one of: {', '.join(_VALID_KINDS)}"
         )
-    return s  # type: ignore[return-value]
+    return s
 
 
 def _value_str(v: object) -> str:

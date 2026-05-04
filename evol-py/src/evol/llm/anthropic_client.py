@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from evol.errors import EvolLLMError
 from evol.llm.base import LLMBackendKind, LLMClient, LLMResponse, Message
@@ -65,8 +65,8 @@ class AnthropicClient(LLMClient):
             }
             if system_text:
                 kwargs["system"] = system_text
-            resp = self._client.messages.create(**kwargs)
-        except Exception as e:  # noqa: BLE001
+            resp = self._client.messages.create(**cast(Any, kwargs))
+        except Exception as e:
             raise EvolLLMError(f"Anthropic call failed: {e}") from e
 
         text_parts = [

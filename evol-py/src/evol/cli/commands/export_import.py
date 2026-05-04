@@ -13,7 +13,6 @@ from evol.cli import output as out
 from evol.config import load_config
 from evol.errors import EvolError
 
-
 # ─── export ───
 
 
@@ -145,9 +144,9 @@ def import_cmd(ctx: click.Context, source: Path, force: bool) -> None:
     try:
         with tarfile.open(source, "r:gz") as tar:
             try:
-                tar.extractall(target, filter="data")  # type: ignore[arg-type]
+                tar.extractall(target, filter="data")
             except TypeError:
-                tar.extractall(target)  # noqa: S202
+                tar.extractall(target)
     except (OSError, tarfile.TarError) as e:
         out.error(f"import failed: {e}")
         raise click.Abort() from e

@@ -12,18 +12,15 @@ from pathlib import Path
 import pytest
 
 from evol import Evol
-from evol.advisor import Advisor
+from evol.config.anchors import parse_anchors
 from evol.config.schema import (
     AnchorConfig,
     Config,
-    InspirationConfig,
     ProductConfig,
 )
-from evol.config.anchors import parse_anchors
 from evol.core.types import Insight, ProposedChange
 from evol.llm import MockLLMClient
 from evol.reflector.filter import AnchorFilter
-
 
 pytestmark = pytest.mark.conformance
 
@@ -144,7 +141,7 @@ def test_anchor_violation_excluded_from_memory(tmp_path: Path) -> None:
             },
         ]
     )
-    evol._llm = MockLLMClient([fake])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake])
     result = evol.reflector.reflect()
     assert result.status == "completed"
     assert result.insights_applied == 1
@@ -187,7 +184,7 @@ def test_anchor_rejection_recorded_in_audit_log(tmp_path: Path) -> None:
             }
         ]
     )
-    evol._llm = MockLLMClient([fake])  # noqa: SLF001
+    evol._llm = MockLLMClient([fake])
     evol.reflector.reflect()
 
     md = next((evol.evol_dir / "insights").glob("*.md")).read_text(encoding="utf-8")
@@ -222,7 +219,7 @@ def test_inspire_anchor_blocks_violating_text(tmp_path: Path) -> None:
             "evidence_ids": ["e1"],
         }
     )
-    evol._llm = MockLLMClient([raw])  # noqa: SLF001
+    evol._llm = MockLLMClient([raw])
     for i in range(12):
         h = evol.recorder.start_task(f"x-{i}")
         evol.recorder.end_task(h, f"y-{i}")

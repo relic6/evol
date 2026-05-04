@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tarfile
 import threading
 import time
 from pathlib import Path
@@ -17,7 +18,6 @@ from evol.concurrency import (
     make_snapshot_tar,
 )
 from evol.errors import EvolLockError, EvolStorageError
-
 
 # ─── atomic_write_text / bytes ───
 
@@ -153,8 +153,6 @@ def test_snapshot_paths_are_relative(tmp_path: Path) -> None:
 
     archive = tmp_path / "snap.tar.gz"
     make_snapshot_tar(src, archive)
-
-    import tarfile
 
     with tarfile.open(archive, "r:gz") as tar:
         names = [m.name for m in tar.getmembers()]

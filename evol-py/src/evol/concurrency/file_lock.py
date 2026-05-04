@@ -9,7 +9,7 @@ CONTRACT §9 / §12 require SDKs to use OS-level advisory file locks for
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 import portalocker
@@ -45,38 +45,34 @@ def file_lock(
 
     flags = portalocker.LOCK_EX if exclusive else portalocker.LOCK_SH
 
-    fh = None
     try:
-        fh = open(p, "a+b")
-        try:
-            portalocker.lock(fh, flags | portalocker.LOCK_NB)
-        except LockException:
-            # Fall back to a polling acquire with overall timeout.
-            import time  # noqa: PLC0415
+        with p.open("a+b") as fh:
+            try:
+                portalocker.lock(fh, flags | portalocker.LOCK_NB)
+            except LockException:
+                # Fall back to a polling acquire with overall timeout.
+                import time  # noqa: PLC0415
 
-            deadline = time.monotonic() + timeout
-            acquired = False
-            while time.monotonic() < deadline:
-                try:
-                    portalocker.lock(fh, flags | portalocker.LOCK_NB)
-                    acquired = True
-                    break
-                except LockException:
-                    time.sleep(0.05)
-            if not acquired:
-                raise EvolLockError(
-                    f"timed out acquiring lock on {p} after {timeout}s"
-                ) from None
-        yield
+                deadline = time.monotonic() + timeout
+                acquired = False
+                while time.monotonic() < deadline:
+                    try:
+                        portalocker.lock(fh, flags | portalocker.LOCK_NB)
+                        acquired = True
+                        break
+                    except LockException:
+                        time.sleep(0.05)
+                if not acquired:
+                    raise EvolLockError(
+                        f"timed out acquiring lock on {p} after {timeout}s"
+                    ) from None
+            try:
+                yield
+            finally:
+                with suppress(OSError, LockException):
+                    portalocker.unlock(fh)
     except (OSError, LockException) as e:
         raise EvolLockError(f"unable to acquire lock on {p}: {e}") from e
-    finally:
-        if fh is not None:
-            try:
-                portalocker.unlock(fh)
-            except (OSError, LockException):
-                pass
-            fh.close()
 
 
 __all__ = ["file_lock"]

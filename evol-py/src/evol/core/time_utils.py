@@ -30,10 +30,7 @@ def utc_now_iso() -> str:
 
 def _to_iso(dt: datetime) -> str:
     """Format a tz-aware datetime as ISO 8601 with milliseconds + ``Z``."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
+    dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
     millis = dt.microsecond // 1000
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{millis:03d}Z"
 

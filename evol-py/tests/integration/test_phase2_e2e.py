@@ -12,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from evol import Evol
-from evol.config import load_config
 from evol.core.types import Signal
 
 
