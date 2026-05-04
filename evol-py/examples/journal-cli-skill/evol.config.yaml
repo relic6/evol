@@ -1,0 +1,42 @@
+schema_version: 1
+
+product:
+  name: journal-cli-skill
+  version: 0.1.0
+  domain: 个人日记总结（Skill 嵌入版）
+
+anchors:
+  - description: 忠实于原文
+    kind: text
+    rule: 总结必须忠实于原文，不杜撰，不加戏
+
+  - description: 输出语言一致
+    kind: text
+    rule: 输出语言必须与输入语言一致
+
+reflection:
+  trigger: threshold
+  threshold: 5
+  max_experiences_per_run: 50
+
+inspiration:
+  frequency: low
+  cooldown_hours: 24
+  max_per_day: 1
+  # In host mode we defer inspirations to the host (writes a pending_request).
+  # Use 'template' for a no-LLM Memory-driven suggestion instead, or
+  # 'disabled' to opt out entirely.
+  host_strategy: defer
+
+memory:
+  retention:
+    snapshots:
+      keep: 20
+
+llm:
+  backend: host
+  host:
+    request_ttl_hours: 168       # one week before pending requests expire
+    purpose_whitelist:
+      - reflection
+      - inspiration

@@ -1,0 +1,49 @@
+schema_version: 1
+
+product:
+  name: journal-cli
+  version: 0.1.0
+  domain: 个人日记总结
+
+# Value anchors — EVOL will refuse to learn anything that contradicts these.
+anchors:
+  - description: 忠实于原文
+    kind: text
+    rule: 总结必须忠实于原文，不杜撰，不加戏
+
+  - description: 输出语言
+    kind: text
+    rule: 输出语言必须与输入语言一致
+
+  - description: 篇幅控制
+    kind: regex
+    rule: (\d{4,})\s*字
+
+# Reflection: every 5 tasks (low for demo; production might use 20).
+reflection:
+  trigger: threshold
+  threshold: 5
+  max_experiences_per_run: 50
+
+# Inspirations: gentle, never spam.
+inspiration:
+  frequency: low
+  cooldown_hours: 24
+  max_per_day: 2
+  host_strategy: defer
+
+# Memory retention.
+memory:
+  retention:
+    experiences:
+      max_count: 10000
+      max_days: 365
+    snapshots:
+      keep: 20
+
+# LLM backend: defaults to auto-detect (ANTHROPIC_API_KEY → direct).
+llm:
+  backend: auto
+  direct:
+    provider: anthropic
+    model: claude-sonnet-4-6
