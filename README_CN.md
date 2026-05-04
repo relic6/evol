@@ -283,6 +283,4 @@ EVOL 明确不做：
 - 不把成长资产隐藏在黑盒向量或模型权重里
 - 不在每一次用户请求中实时反思
 
-## License
 
-Apache License 2.0. See [LICENSE](./LICENSE).

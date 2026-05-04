@@ -293,6 +293,3 @@ EVOL deliberately does not:
 - hide growth assets in opaque vectors or model weights
 - run reflection on every user request
 
-## License
-
-Apache License 2.0. See [LICENSE](./LICENSE).

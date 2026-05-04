@@ -150,6 +150,3 @@ Full design documentation lives one level up in [`evol/`](../):
 | Design (language-agnostic) | [ARCHITECTURE](../ARCHITECTURE.md) / [CONTRACT](../CONTRACT.md) / [DATA-MODEL](../DATA-MODEL.md) / [FLOWS](../FLOWS.md) / [LLM-BACKENDS](../LLM-BACKENDS.md) |
 | Implementation (Python) | [IMPLEMENTATION](../IMPLEMENTATION.md) — including the 84-task progress table |
 
-## License
-
-Apache 2.0 — see [`LICENSE`](./LICENSE).
